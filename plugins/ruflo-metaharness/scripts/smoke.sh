@@ -191,6 +191,37 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z. ADR-152 §3.1 deep integration — oia-audit fingerprint + audit-trend structuralDistance (iter 38)"
+miss=""
+# oia-audit captures score + genome AND surfaces a fingerprint{score,genome}
+OIA="$ROOT/scripts/oia-audit.mjs"
+grep -q "score = runOne(\['score'" "$OIA" 2>/dev/null || miss="$miss no-score-capture"
+grep -q "genome = runOne(\['genome'" "$OIA" 2>/dev/null || miss="$miss no-genome-capture"
+grep -q "fingerprint: {" "$OIA" 2>/dev/null || miss="$miss no-fingerprint-field"
+# audit-trend imports the production similarity module and surfaces a verdict
+AT="$ROOT/scripts/audit-trend.mjs"
+grep -q "from './_similarity.mjs'" "$AT" 2>/dev/null || miss="$miss no-similarity-import"
+grep -q "structuralDistance" "$AT" 2>/dev/null || miss="$miss no-structural-distance-field"
+grep -q "near-identical\|minor-drift\|moderate-drift\|major-drift" "$AT" 2>/dev/null || miss="$miss no-verdict-thresholds"
+grep -q -- "--alert-on-distance-below" "$AT" 2>/dev/null || miss="$miss no-distance-alert-flag"
+# Runtime: graceful fallback when fingerprint missing (no crash on old records)
+TMPOLD=$(mktemp); TMPNEW=$(mktemp)
+cat > "$TMPOLD" <<'JSON'
+{"startedAt":"2026-06-01T00:00:00Z","composite":{"worst":"clean"},"components":{"oiaManifest":{},"threatModel":{},"mcpScan":{"json":{"findings":[]}}}}
+JSON
+cat > "$TMPNEW" <<'JSON'
+{"startedAt":"2026-06-15T00:00:00Z","composite":{"worst":"clean"},"components":{"oiaManifest":{},"threatModel":{},"mcpScan":{"json":{"findings":[]}}},"fingerprint":{"score":{"harnessFit":82,"recommendedMode":"CLI + MCP","archetype":"typescript-sdk-harness","template":"vertical:coding"},"genome":{"repo_type":"node_mcp_ci","agent_topology":["maintainer","tester"],"risk_score":0.3}}}
+JSON
+OUT=$(node "$AT" --baseline "$TMPOLD" --current "$TMPNEW" --format json 2>/dev/null)
+echo "$OUT" | grep -q '"verdict": "unavailable"' || miss="$miss no-graceful-fallback"
+# Runtime: structural-distance path emits a numeric overall when both have fingerprints
+cp "$TMPNEW" "$TMPOLD"
+OUT2=$(node "$AT" --baseline "$TMPOLD" --current "$TMPNEW" --format json 2>/dev/null)
+echo "$OUT2" | grep -q '"verdict": "near-identical"' || miss="$miss no-near-identical-self"
+echo "$OUT2" | grep -q '"distance": 0' || miss="$miss self-distance-not-zero"
+rm -f "$TMPOLD" "$TMPNEW"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17y. ADR-152 production — _similarity.mjs module + similarity.mjs skill + MCP tool + dispatcher (iter 36)"
 miss=""
 # Production module

@@ -84,10 +84,15 @@ function main() {
   const oia = runOne(['oia-manifest', ARGS.path], 'oia-manifest');
   const tm = runOne(['threat-model', ARGS.path], 'threat-model');
   const mcp = runOne(['mcp-scan', ARGS.path], 'mcp-scan');
+  // iter 38 — bundle score + genome so audit-trend can compute structural
+  // distance via _similarity.mjs (ADR-152 §3.1 dep). Both are pure-read
+  // and degrade gracefully like the other three.
+  const score = runOne(['score', ARGS.path], 'score');
+  const genome = runOne(['genome', ARGS.path], 'genome');
 
-  // If all three say "metaharness not available", surface the degraded
+  // If all FIVE say "metaharness not available", surface the degraded
   // payload exactly once and exit 0 (architectural constraint #3).
-  if (oia.degraded && tm.degraded && mcp.degraded) {
+  if (oia.degraded && tm.degraded && mcp.degraded && score.degraded && genome.degraded) {
     emitDegradedJsonAndExit('metaharness-not-available');
     return;
   }
@@ -116,7 +121,14 @@ function main() {
     startedAt,
     finishedAt: new Date().toISOString(),
     composite: { worst: compositeWorst, threatModelWorst: tmWorst, mcpScanWorst: mcpWorst },
-    components: { oiaManifest: oia, threatModel: tm, mcpScan: mcp },
+    components: { oiaManifest: oia, threatModel: tm, mcpScan: mcp, score, genome },
+    // iter 38 — denormalized harness fingerprint for cheap similarity().
+    // Mirrors the shape `_similarity.mjs::similarity()` expects so
+    // audit-trend can call it without reshuffling components.
+    fingerprint: {
+      score: score?.json && !score.degraded ? score.json : null,
+      genome: genome?.json && !genome.degraded ? genome.json : null,
+    },
     alert: ARGS.alertWorst !== null ? {
       threshold: ARGS.alertWorst,
       triggered: alertTriggered,

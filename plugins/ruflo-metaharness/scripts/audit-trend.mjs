@@ -26,6 +26,10 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+// iter 38 — structural-distance drift via ADR-152 §3.1 production module.
+// Falls back to null if either record predates iter-38 oia-audit (no
+// fingerprint field) — graceful degradation, never throws.
+import { similarity } from './_similarity.mjs';
 
 const SEVERITY_RANK = { clean: 0, low: 1, medium: 2, high: 3 };
 const NS = process.env.AUDIT_TREND_NAMESPACE || 'metaharness-audit';
@@ -38,6 +42,8 @@ const ARGS = (() => {
     baseline: null, current: null,
     baselineKey: null, currentKey: null,
     alertOnWorsening: false, format: 'table',
+    // iter 38 — structural-distance gate (ADR-152 §3.1 dep)
+    alertOnDistanceBelow: null,
   };
   for (let i = 2; i < process.argv.length; i++) {
     const v = process.argv[i];
@@ -46,6 +52,7 @@ const ARGS = (() => {
     else if (v === '--baseline-key') a.baselineKey = process.argv[++i];
     else if (v === '--current-key') a.currentKey = process.argv[++i];
     else if (v === '--alert-on-worsening') a.alertOnWorsening = true;
+    else if (v === '--alert-on-distance-below') a.alertOnDistanceBelow = Number(process.argv[++i]);
     else if (v === '--format') a.format = process.argv[++i];
   }
   return a;
@@ -131,6 +138,36 @@ function main() {
   const introduced = currFindings.filter((f) => !baseSet.has(fingerprint(f)));
   const cleared    = baseFindings.filter((f) => !currSet.has(fingerprint(f)));
 
+  // iter 38 — structural distance via ADR-152 §3.1 similarity().
+  // Both records need a fingerprint (score+genome) — iter-38 oia-audit
+  // adds it; older records skip with verdict 'unavailable'.
+  let structuralDistance = null;
+  if (baseline.fingerprint?.score && baseline.fingerprint?.genome
+      && current.fingerprint?.score && current.fingerprint?.genome) {
+    const sim = similarity(baseline.fingerprint, current.fingerprint);
+    structuralDistance = {
+      overall: sim.overall,
+      // Distance is the complement of similarity in [0,1]
+      distance: Number((1 - sim.overall).toFixed(4)),
+      components: sim.components,
+      verdict: sim.overall >= 0.95 ? 'near-identical'
+        : sim.overall >= 0.80 ? 'minor-drift'
+        : sim.overall >= 0.50 ? 'moderate-drift'
+        : 'major-drift',
+    };
+  } else {
+    structuralDistance = {
+      verdict: 'unavailable',
+      reason: 'one or both records predate iter-38 oia-audit fingerprint bundling',
+    };
+  }
+
+  // Distance alert is independent of severity worsening — a harness can
+  // structurally drift while keeping the same worst-severity verdict.
+  const distanceAlertTriggered = ARGS.alertOnDistanceBelow != null
+    && structuralDistance.overall != null
+    && structuralDistance.overall < ARGS.alertOnDistanceBelow;
+
   const payload = {
     baseline: {
       startedAt: baseline.startedAt,
@@ -150,12 +187,17 @@ function main() {
         introduced: introduced.slice(0, 20),  // truncate for output sanity
         cleared: cleared.slice(0, 20),
       },
+      // iter 38 — structural distance via ADR-152 §3.1
+      structuralDistance,
     },
-    alert: ARGS.alertOnWorsening ? {
-      triggered: worsened,
-      reason: worsened
-        ? `composite worst ${baseWorst} → ${currWorst}`
-        : `composite worst stable or improved (${baseWorst} → ${currWorst})`,
+    alert: (ARGS.alertOnWorsening || ARGS.alertOnDistanceBelow != null) ? {
+      triggered: worsened || distanceAlertTriggered,
+      reasons: [
+        ARGS.alertOnWorsening && worsened
+          ? `composite worst ${baseWorst} → ${currWorst}` : null,
+        distanceAlertTriggered
+          ? `structural similarity ${structuralDistance.overall} < threshold ${ARGS.alertOnDistanceBelow}` : null,
+      ].filter(Boolean),
     } : null,
     generatedAt: new Date().toISOString(),
   };
@@ -196,8 +238,26 @@ function main() {
       }
     }
     console.log('');
+    // iter 38 — structural distance row
+    if (structuralDistance.verdict !== 'unavailable') {
+      console.log(`## Structural distance (ADR-152 §3.1)`);
+      console.log('');
+      console.log(`| Metric | Value |`);
+      console.log(`|---|---:|`);
+      console.log(`| overall similarity | ${structuralDistance.overall.toFixed(4)} |`);
+      console.log(`| distance (1 − sim) | ${structuralDistance.distance.toFixed(4)} |`);
+      console.log(`| verdict | **${structuralDistance.verdict}** |`);
+      console.log('');
+    } else {
+      console.log(`Structural distance: _unavailable — ${structuralDistance.reason}_`);
+      console.log('');
+    }
     if (payload.alert) {
-      console.log(payload.alert.triggered ? `⚠ **ALERT**: ${payload.alert.reason}` : `✓ ${payload.alert.reason}`);
+      if (payload.alert.triggered) {
+        console.log(`⚠ **ALERT**: ${payload.alert.reasons.join('; ')}`);
+      } else {
+        console.log(`✓ no alert triggered`);
+      }
     }
   }
 
