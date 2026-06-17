@@ -131,7 +131,7 @@ This adds slash commands and agent definitions only. The Ruflo MCP server is NOT
 | [**ruflo-adr**](plugins/ruflo-adr/README.md) | Track architecture decisions with a living record |
 | [**ruflo-ddd**](plugins/ruflo-ddd/README.md) | Scaffold domain-driven design — contexts, aggregates, events |
 | [**ruflo-sparc**](plugins/ruflo-sparc/README.md) | Guided 5-phase development methodology with quality gates |
-| [**ruflo-metaharness**](plugins/ruflo-metaharness/README.md) | Audit any agent harness — readiness scoring, MCP security scan, threat model, composite audits, ADR-152 §3.1 genome similarity, one-command drift detection ([guide](docs/metaharness-user-guide.md)) |
+| [**ruflo-metaharness**](plugins/ruflo-metaharness/README.md) | Audit any agent harness — readiness scoring, MCP security scan, threat model, composite audits, genome similarity, one-command drift detection ([guide](docs/metaharness-user-guide.md)) |
 
 #### DevOps & Observability
 
@@ -205,7 +205,7 @@ claude mcp add ruflo -- npx ruflo@latest mcp start
 | 🔌 **Multi-Provider** | Claude, GPT, Gemini, Cohere, Ollama with smart routing |
 | 🛡️ **Security** | AIDefence, input validation, CVE remediation, path traversal prevention |
 | 🌐 **Agent Federation** | Cross-installation agent collaboration with zero-trust security |
-| 🔬 **[MetaHarness](docs/metaharness-user-guide.md)** ([ADR-150](v3/docs/adr/ADR-150-metaharness-integration-surfaces.md)) | 10 `ruflo metaharness *` subcommands + 9 MCP tools — harness readiness scoring, MCP security scanning, threat modeling, composite audits, ADR-152 §3.1 genome similarity, one-command drift detection — plus `ruflo eject` to lift any ruflo project into a renamed standalone harness. Optional dep, graceful degradation. See [user guide](docs/metaharness-user-guide.md) |
+| 🔬 **[MetaHarness](docs/metaharness-user-guide.md)** | 10 `ruflo metaharness *` subcommands + 9 MCP tools — harness readiness scoring, MCP security scanning, threat modeling, composite audits, genome similarity, one-command drift detection — plus `ruflo eject` to lift any ruflo project into a renamed standalone harness. Optional dep, graceful degradation. See [user guide](docs/metaharness-user-guide.md) |
 | 💬 **[Web UI Beta](https://flo.ruv.io/)** | Multi-model chat at flo.ruv.io with parallel MCP tool calling and an in-browser WASM tool gallery |
 | 🎯 **[RuFlo Research](https://goal.ruv.io/)** | GOAP A\* planner at goal.ruv.io — plain-English goals → executable agent plans, with a live agent dashboard at [/agents](https://goal.ruv.io/agents) |
 
@@ -378,7 +378,7 @@ Four docs for four audiences:
 |-----|-----------------|
 | **[Status](docs/STATUS.md)** | See what currently works — capability counts, test baselines, recent fixes, what's next. The *is-it-ready* doc. |
 | **[User Guide](docs/USERGUIDE.md)** | Daily reference — every command, every config flag, every plugin. The *how-do-I* doc. |
-| **[MetaHarness Guide](docs/metaharness-user-guide.md)** | Deep guide to the 10 `ruflo metaharness *` subcommands + 9 MCP tools + ADR-152 §3.1 similarity + `ruflo eject`. The *audit-the-harness* doc. |
+| **[MetaHarness Guide](docs/metaharness-user-guide.md)** | Deep guide to the 10 `ruflo metaharness *` subcommands + 9 MCP tools + genome similarity + `ruflo eject`. The *audit-the-harness* doc. |
 | **[Benchmarks](https://gist.github.com/ruvnet/298f8c668c8859b369f91734a0e9cbbe)** | v3.8.0 SOTA matrix vs LangGraph / AutoGen / CrewAI on darwin-arm64 + linux-x64. ruflo wins cold start, single turn, RSS by 1.3×–1953×. The *is-it-fast* doc. |
 | **[Verification](verification.md)** | Cryptographically prove your installed bytes match the signed witness — `ruflo verify`. The *trust-but-verify* doc. |
 | **[Team Gateway Checklist](docs/TEAM-GATEWAY-CHECKLIST.md)** | Before-merge gates, dual-mode handoff, memory namespace sharing, and witness manifest entry per merge. The *safer-team-workflows* doc. |
