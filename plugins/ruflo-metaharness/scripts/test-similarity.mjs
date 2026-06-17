@@ -24,6 +24,8 @@
 import {
   projectToVec, cosine, categoricalAgreement, jaccard, similarity,
 } from './_similarity.mjs';
+// iter 64 — also test the iter-63 shared severity primitives
+import { SEVERITY_RANK, rankSeverity } from './_harness.mjs';
 
 const ARGS = (() => {
   const a = { format: 'table' };
@@ -192,6 +194,52 @@ assert(sLS.components.categorical === 0.75,
   `LEGAL × SUPPORT categorical must be 0.75 (got ${sLS.components.categorical})`);
 assert(sLS.components.jaccard === 0.2857,
   `LEGAL × SUPPORT jaccard must be 0.2857 (got ${sLS.components.jaccard})`);
+
+console.log('\nPhase 9 — iter-63 shared SEVERITY_RANK + rankSeverity()');
+// Known severities — full vocab the iter-50 parser produces
+assert(SEVERITY_RANK.clean === 0, 'rank.clean === 0');
+assert(SEVERITY_RANK.info === 0, 'rank.info === 0 (informational, no harm)');
+assert(SEVERITY_RANK.low === 1, 'rank.low === 1');
+assert(SEVERITY_RANK.medium === 2, 'rank.medium === 2');
+assert(SEVERITY_RANK.warn === 2, 'rank.warn === 2 (warn ≈ medium)');
+assert(SEVERITY_RANK.high === 3, 'rank.high === 3');
+assert(SEVERITY_RANK.error === 3, 'rank.error === 3 (error ≈ high)');
+assert(SEVERITY_RANK.critical === 4, 'rank.critical === 4 (elevated above high)');
+
+// Object.freeze blocks mutation — anti-tamper guard
+const before = SEVERITY_RANK.high;
+let mutated = false;
+try { SEVERITY_RANK.high = 999; mutated = SEVERITY_RANK.high !== before; } catch { /* strict mode throws */ }
+assert(!mutated, 'SEVERITY_RANK frozen — mutation does not stick');
+
+// rankSeverity safe accessor
+assert(rankSeverity('info') === 0, 'rankSeverity("info") === 0');
+assert(rankSeverity('CRITICAL') === 4, 'rankSeverity case-insensitive ("CRITICAL" → 4)');
+assert(rankSeverity('Warn') === 2, 'rankSeverity case-insensitive ("Warn" → 2)');
+assert(rankSeverity('unknown') === 0, 'rankSeverity("unknown") === 0 (no NaN)');
+assert(rankSeverity(null) === 0, 'rankSeverity(null) === 0');
+assert(rankSeverity(undefined) === 0, 'rankSeverity(undefined) === 0');
+assert(rankSeverity('') === 0, 'rankSeverity("") === 0');
+assert(rankSeverity(' high ') === 0,
+  'rankSeverity does not strip whitespace (returns 0 for non-normalized input)');
+
+// Rollup pattern mirrors oia-audit's reduce
+function rollup(findings) {
+  return findings.reduce((acc, f) => {
+    const s = String(f.severity || 'low').toLowerCase();
+    return rankSeverity(s) > rankSeverity(acc) ? s : acc;
+  }, 'clean');
+}
+assert(rollup([{ severity: 'info' }]) === 'clean',
+  'rollup info-only stays clean');
+assert(rollup([{ severity: 'warn' }]) === 'warn',
+  'rollup warn-only elevates to warn (was NaN-ignored pre-iter-63)');
+assert(rollup([{ severity: 'critical' }, { severity: 'info' }]) === 'critical',
+  'rollup with critical elevates above info');
+assert(rollup([{ severity: 'low' }, { severity: 'warn' }, { severity: 'high' }, { severity: 'critical' }]) === 'critical',
+  'rollup picks max across mixed severities');
+assert(rollup([{ severity: 'unknown-strange-value' }]) === 'clean',
+  'rollup with unknown severity stays clean (safe default)');
 
 // ──────────────────────────────────────────────────────────────────
 const summary = {

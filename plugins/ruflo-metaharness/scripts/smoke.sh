@@ -191,6 +191,19 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z27. rankSeverity + rollup unit tests (iter 64 — locks iter-63 fix)"
+miss=""
+F="$ROOT/scripts/test-similarity.mjs"
+grep -q "Phase 9 — iter-63 shared SEVERITY_RANK" "$F" 2>/dev/null || miss="$miss no-phase-9"
+grep -q "SEVERITY_RANK frozen" "$F" 2>/dev/null || miss="$miss no-freeze-test"
+grep -q "rankSeverity case-insensitive" "$F" 2>/dev/null || miss="$miss no-case-insensitive-test"
+grep -q "rankSeverity(null)" "$F" 2>/dev/null || miss="$miss no-null-test"
+grep -q "rollup warn-only elevates to warn" "$F" 2>/dev/null || miss="$miss no-warn-rollup-test"
+grep -q "rollup with critical elevates above info" "$F" 2>/dev/null || miss="$miss no-critical-rollup-test"
+# Runtime: test passes (now 75+ assertions)
+node "$F" >/dev/null 2>&1 || miss="$miss runtime-fails"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17z26. SEVERITY_RANK consolidated to _harness.mjs (iter 63)"
 miss=""
 HARNESS="$ROOT/scripts/_harness.mjs"
